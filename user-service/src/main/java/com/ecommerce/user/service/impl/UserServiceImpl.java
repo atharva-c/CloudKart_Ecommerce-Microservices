@@ -5,35 +5,51 @@ import com.ecommerce.user.dto.LoginResponseDto;
 import com.ecommerce.user.dto.UserCreateRequestDto;
 import com.ecommerce.user.dto.UserResponseDto;
 import com.ecommerce.user.entity.User;
+import com.ecommerce.user.exception.ResourceAlreadyExistsException;
+import com.ecommerce.user.exception.ResourceNotFoundException;
+import com.ecommerce.user.mapper.AuthMapper;
+import com.ecommerce.user.mapper.UserMapper;
 import com.ecommerce.user.repository.UserRepository;
 import com.ecommerce.user.service.UserService;
-import org.hibernate.annotations.Audited;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.ecommerce.user.util.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
+@Service
+@RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
-    @Autowired
+
     private UserRepository userRepository;
+    private UserMapper userMapper;
+    private PasswordEncoder passwordEncoder;
+    private JwtUtil jwtUtil;
+    private AuthMapper authMapper;
+
     @Override
     public UserResponseDto register(UserCreateRequestDto userCreateRequestDto) {
-        if (userRepository.existsByEmail(userCreateRequestDto.getEmail())) {
-            throw new RuntimeException("Email Already Exists");
+        if(userRepository.existsByEmail(userCreateRequestDto.getEmail())) {
+            throw new ResourceAlreadyExistsException("Email Already Exists");
         }
-        User user = new User();
-        user.setName(userCreateRequestDto.getName());
-        user.setEmail(userCreateRequestDto.getEmail());
-        user.setPassword(userCreateRequestDto.getPassword());
+        User user = userMapper.toEntity(userCreateRequestDto);
         User savedUser = userRepository.save(user);
-        return new UserResponseDto();
-
+        return userMapper.toDto(savedUser);
     }
 
     @Override
     public LoginResponseDto login(LoginRequestDto loginRequestDto) {
-        return null;
+        User user = userRepository.findByEmail(loginRequestDto.getEmail()).orElseThrow(()->new ResourceNotFoundException("Invalid Credentials"));
+        boolean matches = passwordEncoder.matches(loginRequestDto.getPassword(), user.getPassword());
+        if(!matches) {
+            throw new ResourceNotFoundException("Invalid Credentials");
+        }
+        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRoles());
+        return authMapper.toLoginResponse(user, token);
     }
 
     @Override
     public UserResponseDto getById(Long id) {
-        return null;
+        User user = userRepository.findById(id).orElseThrow(()->new ResourceNotFoundException("User not found"));
+        return userMapper.toDto(user);
     }
 }
