@@ -10,7 +10,13 @@ spring:
         locator:
           enable: true
           lower-case-service-id: true
-
+      route:
+        - id: USER-SERVICE
+          uri: lb://USER-SERVICE
+          predicates:
+            - path=/user/*
+          filters:
+            - CustomRouteFilter
   eureka:
     client:
       service-url:
